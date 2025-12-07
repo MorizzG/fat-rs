@@ -355,8 +355,6 @@ impl Filesystem for FatFuse {
 
         let flags = OpenFlags::from_bits_truncate(flags);
 
-        debug!("flags: {flags:?}");
-
         let Some(inode) = self.get_inode(ino).cloned() else {
             debug!("inode {ino} not found");
 
@@ -378,8 +376,6 @@ impl Filesystem for FatFuse {
         if let Some(old_ino) = self.ino_by_fh.insert(fh, ino) {
             debug!("fh {} was associated with ino {}, now with ino {}", fh, old_ino, ino);
         }
-
-        debug!("opened inode {}: fh {}", ino, fh);
 
         if flags.contains(OpenFlags::Truncate) {
             inode.update_size(0);
@@ -443,8 +439,6 @@ impl Filesystem for FatFuse {
 
         let file_size = inode.size();
 
-        debug!("file_size: {}", file_size);
-
         if offset > file_size {
             debug!("tried to read after EOF");
 
@@ -480,7 +474,7 @@ impl Filesystem for FatFuse {
 
         let mut buf = vec![0; size as usize];
 
-        let bytes_read = match reader.read(&mut buf) {
+        match reader.read_exact(&mut buf) {
             Ok(n) => n,
             Err(err) => {
                 error!("error while reading: {err}");
@@ -489,13 +483,10 @@ impl Filesystem for FatFuse {
                 return;
             }
         };
-        if bytes_read != size as usize {
-            debug!("expected to read {size} bytes, but only read {bytes_read}");
-        }
 
         inode.update_atime(SystemTime::now());
 
-        reply.data(&buf[..bytes_read]);
+        reply.data(&buf);
 
         // TODO: update access time
     }
@@ -512,7 +503,7 @@ impl Filesystem for FatFuse {
         _lock_owner: Option<u64>,
         reply: fuser::ReplyWrite,
     ) {
-        debug!("new write request: ino={ino} fh={fh} offset={offset} data={data:?}");
+        debug!("new write request: ino={ino} fh={fh} offset={offset}"); // data={data:?}
 
         if offset < 0 {
             debug!("tried to write with negative offset {offset}");

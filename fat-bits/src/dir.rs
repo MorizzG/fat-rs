@@ -71,9 +71,9 @@ pub struct DirEntry {
     file_size: u32,
 
     checksum: u8,
-    long_name: Option<CompactString>,
 
-    n_longname_slots: u8,
+    long_name: Option<CompactString>,
+    n_slots: u8,
 
     offset: u64,
 }
@@ -154,13 +154,13 @@ impl DirEntry {
             write_date,
             file_size,
             long_name: None,
-            n_longname_slots: 0,
+            n_slots: 0,
             checksum: Self::checksum(&bytes[..11]),
             offset,
         })
     }
 
-    pub fn create(_name: &str, attr: Attr) -> anyhow::Result<Self> {
+    pub fn create(name: &str, attr: Attr) -> anyhow::Result<Self> {
         // TODO
         let now: DateTime<Local> = SystemTime::now().into();
 
@@ -168,7 +168,7 @@ impl DirEntry {
         let create_time = Time::from_datetime(now)?;
         let create_time_tenths = (now.time().nanosecond() / 100_000_000) as u8;
 
-        let name = [0; 11];
+        let mut name = [0; 11];
 
         Ok(DirEntry {
             name,
@@ -183,12 +183,14 @@ impl DirEntry {
             file_size: 0,
             checksum: Self::checksum(&name),
             long_name: None,
-            n_longname_slots: 0,
+            n_slots: 0,
             offset: !0,
         })
     }
 
     fn write(&self, mut writer: impl Write) -> std::io::Result<()> {
+        assert_ne!(self.offset, !0);
+
         let mut buf = [0; 32];
 
         buf[..11].copy_from_slice(self.name());
@@ -360,9 +362,8 @@ impl DirEntry {
         self.long_name.as_deref()
     }
 
-    pub fn set_long_name(&mut self, long_name: CompactString, n_slots: u8) {
+    pub fn set_long_name(&mut self, long_name: CompactString) {
         self.long_name = Some(long_name);
-        self.n_longname_slots = n_slots;
     }
 
     pub fn attr(&self) -> Attr {
@@ -712,7 +713,8 @@ impl Iterator for DirIter<'_> {
                 let long_filename: CompactString =
                     char::decode_utf16(iter).filter_map(|x| x.ok()).collect();
 
-                dir_entry.set_long_name(long_filename, n_slots);
+                dir_entry.set_long_name(long_filename);
+                dir_entry.n_slots = n_slots;
             }
 
             me.long_filename_buf.reset();

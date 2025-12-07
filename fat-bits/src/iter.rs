@@ -173,7 +173,7 @@ impl<'a> ClusterChainWriter<'a> {
 
         debug!("next cluster: {next_cluster}");
 
-        self.fat_fs.cluster_as_subslice_mut(next_cluster);
+        self.sub_slice = self.fat_fs.cluster_as_subslice_mut(next_cluster);
         self.cur_cluster = next_cluster;
 
         true
@@ -207,13 +207,19 @@ impl<'a> ClusterChainWriter<'a> {
 
 impl Write for ClusterChainWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        debug!("ClusterChainWriter: trying to write {} bytes...", buf.len());
+
         if self.sub_slice.is_empty() {
+            debug!("sub_slice is empty, trying to advance...");
+
             if !(self.move_to_next_cluster()) {
+                debug!("failed to move to next cluster, returning Ok(0)");
+
                 return Ok(0);
             }
         }
 
-        self.sub_slice.write(buf)
+        dbg!(self.sub_slice.write(buf))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
